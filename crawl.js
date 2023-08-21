@@ -1,27 +1,50 @@
 const {JSDOM} = require('jsdom')
 
-const crawlPage = async (currentUrl) => {
+const crawlPage = async (baseUrl, currentUrl, pages) => {
     console.log(`Crawling ${currentUrl}...`)
+    const baseUrlObj = new URL(baseUrl)
+    const currentUrlObj = new URL(currentUrl);
+
+    // Checking if the pages are of the same domain and website
+    if(baseUrlObj.hostname !== currentUrlObj.hostname) return pages;
+    
+    const normalizedCurrentUrl = normalizeUrl(currentUrl);
+    // Checking if we have already seen this page and incrementing its count that how many times a page has been attached in the website
+    if(pages[normalizedCurrentUrl] > 0){
+        pages[normalizedCurrentUrl]++
+        return pages;
+    }
+
+    pages[normalizedCurrentUrl] = 1;
+
     try{
         const res = await fetch(currentUrl);
 
         if(res.status > 399){
             console.log(`Error ocuured in fetch with status code: ${res.status} on page: ${currentUrl}`)
-            return;
+            return pages;
         }
 
         const contentType = res.headers.get('content-type')
         if(!contentType.includes("text/html")){
             console.log(`Non HTML response, content type: ${contentType} on page: ${currentUrl}`)
-            return;
+            return pages;
         }
 
 
-        const data = await res.text();
-        console.log(data)
+        const htmlBody = await res.text();
+
+        const nextUrls = getUrlFromHTML(htmlBody, baseUrl);
+
+        for(const nextUrl of nextUrls){
+            pages = await crawlPage(baseUrl, nextUrl, pages);
+        }
+
     }catch(err){
         console.log(`Error Ocuured In Fetch: ${err.message} on page: ${currentUrl}`)
     }
+
+    return pages;
 }
 
 const getUrlFromHTML = (htmlBody, baseUrl) => {
